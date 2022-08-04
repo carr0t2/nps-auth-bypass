@@ -1,0 +1,4 @@
+mitmproxy
+requests
+pycryptodome
+loguru
