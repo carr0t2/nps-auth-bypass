@@ -41,9 +41,10 @@ class NpsHack:
             config_auth_key = enc.decrypt(b_key).decode()
             config_auth_key = config_auth_key[0:-ord(config_auth_key[-1])]  # 去填充
             self.config_auth_key = config_auth_key
-            print('成功获取config_auth_key', config_auth_key)
+            print('成功获取config_auth_key', config_auth_key.encode())
         except Exception as e:
-            print(e)
+            # print(e)
+            pass
 
     def request(self, flow: mitmproxy.http.HTTPFlow):
         r = flow.request
