@@ -14,7 +14,7 @@ auth_crypt_key =1234567812345678
 ## 使用方法
 ### web端
 ```
-mitmdump -s main.py -p 8000 --mode reverse:http://x.x.x.x:x/
+mitmdump -s main.py -p 8000 --ssl-insecure --mode reverse:http://x.x.x.x:x/
 ```
 浏览器访问 http://127.0.0.1:8000/
 
@@ -23,24 +23,27 @@ mitmdump -s main.py -p 8000 --mode reverse:http://x.x.x.x:x/
 > 目前稳定性有待测试，提供两种版本，代码略有区别
 
 单线程
-```shell
-usage: scan.py [-h] [-u URL] [-f FILE] [-o OUTPUT] [-p PROXY] [-v]
+```
+usage: scan.py [-h] [-u URL] [-l URL_LIST] [--format {txt,csv,json,mongodb}]
+               [-p PROXY] [-v]
 
 Example: python scan.py -u target_url -o txt -v
-         python scan.py -f file -o csv -p http://127.0.0.1:1080
+         python scan.py -l url_list -o csv -p http://127.0.0.1:1080
 
 optional arguments:
   -h, --help            show this help message and exit
-  -u URL, --url URL     Target url, such as 127.0.0.1:8080
-  -f FILE, --file FILE  Targets file path, such as xxx.txt
-  -o OUTPUT, --output OUTPUT
-                        Output format, such as txt, csv, json, mongodb
+  -u URL, --url URL     Target URL
+  -l URL_LIST, --url-list URL_LIST
+                        Target URL list file
+  --format {txt,csv,json,mongodb}
+                        Report format (Default: txt)
   -p PROXY, --proxy PROXY
-                        Proxy, such as http://127.0.0.1:1080
+                        Proxy URL, support HTTP and SOCKS proxies
+                        (Example: http://localhost:8080, socks5://localhost:8088)
   -v, --verbose         Execute in verbose mode
 ```
 多线程
-```shell
+```
 usage: scan_multi.py [-h] [-u URL] [-l URL_LIST] [--stdin]
                      [--format {txt,csv,json,mongodb}] [-p PROXY] [-t THREAD]
                      [-v]
@@ -69,8 +72,6 @@ optional arguments:
 
 * 修改或注释`auth_crypt_key`
 
-## 小问题
-web版本后端目前可能不支持https
 
 ## 免责声明
 本工具仅面向合法授权的企业安全建设行为，如您需要测试本工具的可用性，请自行搭建靶机环境。
@@ -82,7 +83,8 @@ web版本后端目前可能不支持https
 在安装并使用本工具前，请您务必审慎阅读、充分理解各条款内容，限制、免责条款或者其他涉及您重大权益的条款可能会以加粗、加下划线等形式提示您重点注意。 除非您已充分阅读、完全理解并接受本协议所有条款，否则，请您不要安装并使用本工具。您的使用行为或者您以其他任何明示或者默示方式表示接受本协议的，即视为您已阅读并同意本协议的约束。
 ## 效果图
 ![](https://user-images.githubusercontent.com/62796978/182800291-29bd912b-a06d-4069-b5d5-cc6d2e6a0b5d.png)
-![](https://user-images.githubusercontent.com/62796978/183077441-98ae2fec-bd6a-4c99-ba60-78b7444a2f16.png)
+![](https://user-images.githubusercontent.com/62796978/183109155-81b515fe-570c-484f-844b-079778f44138.png)
+
 
 ## 参考链接
 https://github.com/shadow1ng/fscan
