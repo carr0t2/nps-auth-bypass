@@ -1,5 +1,5 @@
 # nps-auth-bypass
-nps认证绕过利用工具，使用此工具可方便地访问web控制端，或者批量获取socks5和http代理
+nps认证绕过利用工具，使用此工具可在浏览器访问web控制端后台页面，或者批量获取socks5和http代理
 
 ## 利用条件
 默认配置 /etc/nps/conf/nps.conf:53
@@ -13,6 +13,7 @@ auth_crypt_key =1234567812345678
 
 ## 使用方法
 ### web端
+> 可以直接在浏览器访问后台
 ```
 mitmdump -s main.py -p 8000 --ssl-insecure --mode reverse:http://x.x.x.x:x/
 ```
@@ -68,9 +69,7 @@ optional arguments:
   -v, --verbose         Execute in verbose mode
 ```
 ## 修复方式
-* 修改`auth_key`为随机值
-
-* 修改或注释`auth_crypt_key`
+修改`auth_key`为随机值 && 修改或注释`auth_crypt_key`
 
 
 ## 免责声明
